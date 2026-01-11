@@ -1,6 +1,21 @@
 #!/bin/zsh
 
-eval "$(/opt/homebrew/bin/brew shellenv)"
+# Initialize Homebrew/Linuxbrew based on platform
+# macOS: /opt/homebrew (Apple Silicon) or /usr/local (Intel)
+# Linux: /home/linuxbrew/.linuxbrew or ~/.linuxbrew
+if [[ -f "/opt/homebrew/bin/brew" ]]; then
+    # macOS Apple Silicon
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -f "/usr/local/bin/brew" ]]; then
+    # macOS Intel
+    eval "$(/usr/local/bin/brew shellenv)"
+elif [[ -f "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
+    # Linux (system-wide Linuxbrew)
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [[ -f "$HOME/.linuxbrew/bin/brew" ]]; then
+    # Linux (user-local Linuxbrew)
+    eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+fi
 
 # Set the directory we want to store zinit and plugins
 ZINIT_HOME="${HOME}/.local/share/zinit/zinit.git"
@@ -119,11 +134,37 @@ if [ -d "$NVM_DIR/versions/node" ]; then
     fi
 
     # Lazy load NVM only when actually needed
+    # Check multiple possible NVM locations (Homebrew macOS, Linuxbrew, manual install)
+    local nvm_script=""
+    local nvm_completion=""
+
     if [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then
+        # macOS Apple Silicon (Homebrew)
+        nvm_script="/opt/homebrew/opt/nvm/nvm.sh"
+        nvm_completion="/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+    elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then
+        # macOS Intel (Homebrew)
+        nvm_script="/usr/local/opt/nvm/nvm.sh"
+        nvm_completion="/usr/local/opt/nvm/etc/bash_completion.d/nvm"
+    elif [ -s "/home/linuxbrew/.linuxbrew/opt/nvm/nvm.sh" ]; then
+        # Linux (Linuxbrew system-wide)
+        nvm_script="/home/linuxbrew/.linuxbrew/opt/nvm/nvm.sh"
+        nvm_completion="/home/linuxbrew/.linuxbrew/opt/nvm/etc/bash_completion.d/nvm"
+    elif [ -s "$HOME/.linuxbrew/opt/nvm/nvm.sh" ]; then
+        # Linux (Linuxbrew user-local)
+        nvm_script="$HOME/.linuxbrew/opt/nvm/nvm.sh"
+        nvm_completion="$HOME/.linuxbrew/opt/nvm/etc/bash_completion.d/nvm"
+    elif [ -s "$NVM_DIR/nvm.sh" ]; then
+        # Manual installation
+        nvm_script="$NVM_DIR/nvm.sh"
+        nvm_completion="$NVM_DIR/bash_completion"
+    fi
+
+    if [ -n "$nvm_script" ]; then
         _load_nvm() {
             unset -f nvm node npm npx yarn _load_nvm
-            \. "/opt/homebrew/opt/nvm/nvm.sh"
-            [ -n "$PS1" ] && [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+            \. "$nvm_script"
+            [ -n "$PS1" ] && [ -s "$nvm_completion" ] && \. "$nvm_completion"
         }
         nvm() { _load_nvm; nvm "$@"; }
     fi
@@ -307,8 +348,10 @@ if [ -f "$HOME/.env" ]; then
     fi
 fi
 
-# Docker settings
-export DOCKER_DEFAULT_PLATFORM=linux/amd64
+# Docker settings (linux/amd64 is useful on Apple Silicon for compatibility)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    export DOCKER_DEFAULT_PLATFORM=linux/amd64
+fi
 
 # Ripgrep configuration (XDG standard location, managed by stow)
 export RIPGREP_CONFIG_PATH="$HOME/.config/ripgrep/config"
@@ -333,7 +376,10 @@ fi
 
 
 ### MANAGED BY RANCHER DESKTOP START (DO NOT EDIT)
-export PATH="${HOME}/.rd/bin:$PATH"
+# Rancher Desktop is primarily used on macOS
+if [[ -d "${HOME}/.rd/bin" ]]; then
+    export PATH="${HOME}/.rd/bin:$PATH"
+fi
 ### MANAGED BY RANCHER DESKTOP END (DO NOT EDIT)
 
 # Source local environment if it exists

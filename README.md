@@ -1,8 +1,17 @@
 # Thisaru's Dotfiles
 
-A comprehensive development environment setup for macOS featuring Zsh, Starship prompt, and a curated collection of productivity tools and shortcuts.
+A comprehensive development environment setup for **macOS** and **Ubuntu/Debian** featuring Zsh, Starship prompt, and a curated collection of productivity tools and shortcuts.
 
 **Author**: Thisaru Guruge ([thisaru.me](https://thisaru.me))
+
+## 🖥️ Supported Platforms
+
+| Platform | Status | Package Manager |
+|----------|--------|-----------------|
+| macOS (Apple Silicon) | ✅ Fully Supported | Homebrew |
+| macOS (Intel) | ✅ Fully Supported | Homebrew |
+| Ubuntu 22.04+ | ✅ Fully Supported | APT + Linuxbrew |
+| Debian 11+ | ✅ Supported | APT + Linuxbrew |
 
 ## 🚀 What You'll Get
 
@@ -26,42 +35,44 @@ A comprehensive development environment setup for macOS featuring Zsh, Starship 
 
 ## 📋 Prerequisites
 
-### Required Software
+### For macOS
 
 1. **macOS** (tested on macOS Sonoma and newer)
 2. **Git** - Usually pre-installed, verify with `git --version`
-3. **Homebrew** - Package manager for macOS
-   ```bash
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   ```
+3. **Homebrew** - Package manager for macOS (installed automatically by init.sh)
 
-### Terminal Setup
+### For Ubuntu/Debian
 
-4. **Modern Terminal** (Choose one):
-   - **Warp** (Recommended) - Modern, fast terminal with AI features
+1. **Ubuntu 22.04+** or **Debian 11+**
+2. **Git** - Install with `sudo apt install git`
+3. **curl** - Install with `sudo apt install curl`
 
-     ```bash
-     brew install --cask warp
-     ```
+The installation script will automatically:
+- Install APT prerequisites (build-essential, zsh, stow, etc.)
+- Install Linuxbrew for developer tools
+- Set Zsh as your default shell
 
-   - **iTerm2** - Feature-rich terminal
+### Terminal Setup (Optional)
 
-     ```bash
-     brew install --cask iterm2
-5. **Nerd Font** - Required for proper icon display in the prompt
+**macOS Terminals**:
+- **Warp** (Recommended) - `brew install --cask warp`
+- **iTerm2** - `brew install --cask iterm2`
 
-   ```bash
-   # Fonts are now in the main homebrew-cask repository (no tap needed)
-   brew install --cask font-fira-code-nerd-font
-   # Or choose another: font-hack-nerd-font, font-jetbrains-mono-nerd-font
-   ```
+**Ubuntu Terminals** (usually pre-installed):
+- **GNOME Terminal** - Default on Ubuntu
+- **Terminator** - `sudo apt install terminator`
+- **Tilix** - `sudo apt install tilix`
 
-   **Configure Your Terminal**:
-   - **Warp**: Go to `Settings > Appearance > Text` and select your Nerd Font
-   - **iTerm2**: Go to `Preferences > Profiles > Text > Font` and select your Nerd Font
-   - **Terminal.app**: Go to `Preferences > Profiles > Text` and select your Nerd Font
-   **Configure Your Terminal**:
-   - **Warp**: Go to `Settings > Appearance > Text` and select your Nerd Font
+### Nerd Font Setup
+
+The installation script will offer to install FiraCode Nerd Font automatically.
+
+**Configure Your Terminal to use the font**:
+- **macOS Warp**: Settings → Appearance → Text → Font
+- **macOS iTerm2**: Preferences → Profiles → Text → Font
+- **GNOME Terminal**: Preferences → Profiles → Text → Custom font
+- **VS Code**: Settings → terminal.integrated.fontFamily → "FiraCode Nerd Font"
+
 ### Option 1: Automated Installation (Recommended)
 
 The easiest way to set up everything:

@@ -3,9 +3,12 @@
 # PATH and Environment Configuration
 # This file safely adds tools to PATH only if they exist on the system
 # All paths are checked before being added for portability across machines
+# Supports both macOS and Ubuntu/Linux
 
-# Docker platform (keep for compatibility)
-export DOCKER_DEFAULT_PLATFORM=linux/amd64
+# Docker platform (only needed on macOS Apple Silicon for x86 compatibility)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    export DOCKER_DEFAULT_PLATFORM=linux/amd64
+fi
 
 # Add local bin directories if they exist
 [ -d "$HOME/.local/bin" ] && export PATH="$HOME/.local/bin:$PATH"

@@ -2,6 +2,7 @@
 
 # Dotfiles Initialization Script
 # This script sets up the complete development environment with dependency checking
+# Supports both macOS and Ubuntu/Debian Linux
 
 set -e # Exit on any error
 
@@ -32,6 +33,34 @@ INFO="ℹ️"
 WARNING="⚠️"
 
 DOTFILES_DIR="$(pwd)"
+
+# Detect operating system
+detect_os() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        OS="macos"
+        OS_NAME="macOS"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            if [[ "$ID" == "ubuntu" || "$ID_LIKE" == *"ubuntu"* || "$ID_LIKE" == *"debian"* || "$ID" == "debian" ]]; then
+                OS="ubuntu"
+                OS_NAME="Ubuntu/Debian"
+            else
+                OS="linux"
+                OS_NAME="Linux"
+            fi
+        else
+            OS="linux"
+            OS_NAME="Linux"
+        fi
+    else
+        OS="unknown"
+        OS_NAME="Unknown"
+    fi
+}
+
+# Run OS detection immediately
+detect_os
 
 # Logging functions
 log_success() {
@@ -95,17 +124,35 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Check if running on macOS
-check_macos() {
-    if [[ "$OSTYPE" != "darwin"* ]]; then
-        log_error "This script is designed for macOS. Detected OS: $OSTYPE"
-        exit 1
-    fi
-    log_success "Running on macOS"
+# Check if running on supported OS
+check_os() {
+    case "$OS" in
+        macos)
+            log_success "Running on macOS"
+            ;;
+        ubuntu)
+            log_success "Running on $OS_NAME"
+            ;;
+        linux)
+            log_warning "Running on unsupported Linux distribution: $OS_NAME"
+            log_info "This script is optimized for Ubuntu/Debian. Some features may not work."
+            if ! confirm "Continue anyway?"; then
+                exit 1
+            fi
+            ;;
+        *)
+            log_error "Unsupported operating system: $OSTYPE"
+            exit 1
+            ;;
+    esac
 }
 
-# Check if Xcode Command Line Tools are installed
+# Check if Xcode Command Line Tools are installed (macOS only)
 check_xcode_tools() {
+    if [[ "$OS" != "macos" ]]; then
+        return 0
+    fi
+
     log_step "Checking Xcode Command Line Tools"
 
     if xcode-select -p >/dev/null 2>&1; then
@@ -125,9 +172,72 @@ check_xcode_tools() {
     fi
 }
 
-# Check and install Homebrew
+# Install Ubuntu/Debian prerequisites via APT
+install_ubuntu_prerequisites() {
+    if [[ "$OS" != "ubuntu" ]]; then
+        return 0
+    fi
+
+    log_step "Installing Ubuntu Prerequisites via APT"
+
+    # Essential build tools required for Linuxbrew and general development
+    local apt_packages=(
+        "build-essential"
+        "curl"
+        "file"
+        "git"
+        "procps"
+        "zsh"
+        "stow"
+        "jq"
+        "unzip"
+        "zip"
+        "fontconfig"
+    )
+
+    local missing_packages=()
+
+    # Check which packages are missing
+    for pkg in "${apt_packages[@]}"; do
+        if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+            missing_packages+=("$pkg")
+        else
+            log_success "$pkg already installed"
+        fi
+    done
+
+    if [ ${#missing_packages[@]} -eq 0 ]; then
+        log_success "All APT prerequisites already installed"
+        return 0
+    fi
+
+    log_info "Missing APT packages: ${missing_packages[*]}"
+    if confirm "Install missing APT packages? (sudo required)"; then
+        log_info "Updating APT package list..."
+        sudo apt-get update
+        log_info "Installing: ${missing_packages[*]}"
+        sudo apt-get install -y "${missing_packages[@]}"
+        log_success "APT prerequisites installed"
+    else
+        log_error "APT prerequisites are required. Exiting."
+        exit 1
+    fi
+
+    # Set Zsh as default shell if not already
+    if [[ "$SHELL" != *"zsh"* ]]; then
+        log_info "Current shell is not Zsh"
+        if confirm "Set Zsh as your default shell?"; then
+            chsh -s "$(which zsh)"
+            log_success "Zsh set as default shell (will take effect on next login)"
+        fi
+    else
+        log_success "Zsh is already the default shell"
+    fi
+}
+
+# Check and install Homebrew/Linuxbrew
 setup_homebrew() {
-    log_step "Checking Homebrew"
+    log_step "Checking Homebrew/Linuxbrew"
 
     if command_exists brew; then
         log_success "Homebrew already installed: $(brew --version | head -n 1)"
@@ -135,43 +245,66 @@ setup_homebrew() {
     fi
 
     log_warning "Homebrew not found"
-    if confirm "Install Homebrew? (Required package manager)"; then
-        log_info "Installing Homebrew..."
+
+    local brew_description="Homebrew"
+    if [[ "$OS" == "ubuntu" ]]; then
+        brew_description="Linuxbrew (Homebrew for Linux)"
+        log_info "Linuxbrew will be used for developer tools (APT handles system packages)"
+    fi
+
+    if confirm "Install $brew_description? (Required package manager for dev tools)"; then
+        log_info "Installing $brew_description..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-        # Add Homebrew to PATH for this session
-        if [[ -f "/opt/homebrew/bin/brew" ]]; then
-            eval "$(/opt/homebrew/bin/brew shellenv)"
-            log_success "Homebrew installed successfully"
-            log_info "Homebrew has been added to PATH for this installation session"
-        elif [[ -f "/usr/local/bin/brew" ]]; then
-            eval "$(/usr/local/bin/brew shellenv)"
-            log_success "Homebrew installed successfully"
-            log_info "Homebrew has been added to PATH for this installation session"
-        else
-            log_warning "Homebrew installed but could not be found in expected locations"
-            log_info "You may need to manually add Homebrew to your PATH"
-            log_info "Run: eval \"\$(/opt/homebrew/bin/brew shellenv)\" or check Homebrew docs"
+        # Add Homebrew to PATH for this session based on OS
+        if [[ "$OS" == "macos" ]]; then
+            if [[ -f "/opt/homebrew/bin/brew" ]]; then
+                eval "$(/opt/homebrew/bin/brew shellenv)"
+                log_success "Homebrew installed successfully (Apple Silicon)"
+            elif [[ -f "/usr/local/bin/brew" ]]; then
+                eval "$(/usr/local/bin/brew shellenv)"
+                log_success "Homebrew installed successfully (Intel)"
+            else
+                log_warning "Homebrew installed but could not be found in expected locations"
+            fi
+        elif [[ "$OS" == "ubuntu" ]]; then
+            # Linuxbrew installs to /home/linuxbrew/.linuxbrew or ~/.linuxbrew
+            if [[ -f "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
+                eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+                log_success "Linuxbrew installed successfully"
+            elif [[ -f "$HOME/.linuxbrew/bin/brew" ]]; then
+                eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+                log_success "Linuxbrew installed successfully (user install)"
+            else
+                log_warning "Linuxbrew installed but could not be found in expected locations"
+                log_info "You may need to manually add Linuxbrew to your PATH"
+                log_info "Try: eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\""
+            fi
         fi
 
-        log_info "Note: Your .zshrc is already configured to load Homebrew on shell startup"
+        log_info "Note: Your .zshrc is configured to load Homebrew on shell startup"
     else
-        log_error "Homebrew is required. Exiting."
+        log_error "Homebrew/Linuxbrew is required for developer tools. Exiting."
         exit 1
     fi
 }
 
-# Install GNU Stow
+# Install GNU Stow (already installed via APT on Ubuntu)
 install_stow() {
-    log_step "Installing GNU Stow"
+    log_step "Checking GNU Stow and jq"
 
+    # On Ubuntu, these should already be installed via APT prerequisites
     if command_exists stow; then
         log_success "GNU Stow already installed: $(stow --version | head -n 1)"
     else
         log_warning "GNU Stow not found"
         if confirm "Install GNU Stow? (Required for dotfiles management)"; then
             log_info "Installing GNU Stow..."
-            brew install stow
+            if [[ "$OS" == "ubuntu" ]]; then
+                sudo apt-get install -y stow
+            else
+                brew install stow
+            fi
             log_success "GNU Stow installed successfully"
         else
             log_error "GNU Stow is required for this dotfiles setup. Exiting."
@@ -186,7 +319,11 @@ install_stow() {
         log_warning "jq not found (needed for dynamic package configuration)"
         if confirm "Install jq? (Enables dynamic package reading from packages.json)"; then
             log_info "Installing jq..."
-            brew install jq
+            if [[ "$OS" == "ubuntu" ]]; then
+                sudo apt-get install -y jq
+            else
+                brew install jq
+            fi
             log_success "jq installed successfully"
         else
             log_warning "jq not installed - will use fallback package lists"
@@ -324,20 +461,38 @@ install_ballerina() {
     fi
 
     if confirm "Install Ballerina programming language?"; then
-        log_info "Installing Ballerina via Homebrew..."
-        if brew install ballerina; then
-            log_success "Ballerina installed successfully"
-
-            # Verify installation
-            if command -v bal >/dev/null 2>&1; then
-                local bal_version
-                bal_version=$(bal version 2>&1 | head -n 1)
-                log_success "Ballerina version: $bal_version"
+        if [[ "$OS" == "macos" ]]; then
+            log_info "Installing Ballerina via Homebrew..."
+            if brew install ballerina; then
+                log_success "Ballerina installed successfully"
             else
-                log_warning "Ballerina installed but not found in PATH. You may need to restart your terminal."
+                log_error "Ballerina installation failed"
+                return 1
             fi
+        elif [[ "$OS" == "ubuntu" ]]; then
+            log_info "Installing Ballerina via official installer..."
+            # Download and install the latest Ballerina for Linux
+            local bal_version="2201.10.0"
+            local bal_url="https://dist.ballerina.io/downloads/${bal_version}/ballerina-${bal_version}-swan-lake-linux-x64.deb"
+            local tmp_deb="/tmp/ballerina.deb"
+
+            if curl -fsSL "$bal_url" -o "$tmp_deb"; then
+                sudo dpkg -i "$tmp_deb" || sudo apt-get install -f -y
+                rm -f "$tmp_deb"
+                log_success "Ballerina installed successfully"
+            else
+                log_warning "Could not download Ballerina. You can install manually from https://ballerina.io/downloads/"
+                return 1
+            fi
+        fi
+
+        # Verify installation
+        if command -v bal >/dev/null 2>&1; then
+            local bal_version
+            bal_version=$(bal version 2>&1 | head -n 1)
+            log_success "Ballerina version: $bal_version"
         else
-            log_error "Ballerina installation failed"
+            log_warning "Ballerina installed but not found in PATH. You may need to restart your terminal."
         fi
     else
         log_warning "Skipped Ballerina installation"
@@ -347,20 +502,34 @@ install_ballerina() {
 # Install terminal applications
 # Enhanced tool installation with individual confirmation and legacy detection
 install_terminal_apps() {
-    log_step "Installing Terminal Applications & Development Tools (Optional)"
+    log_step "Installing Development Tools (Optional)"
 
-    # Define tools with their detection and installation info
-    # Using arrays instead of associative arrays for better compatibility
-    local tools_list=(
-        "cursor|Code Editor|/Applications/Cursor.app|--cask cursor|Legacy: installer download"
-        "visual-studio-code|Code Editor|/Applications/Visual Studio Code.app|--cask visual-studio-code|Legacy: installer download"
-        "warp|Terminal|/Applications/Warp.app|--cask warp|Legacy: none"
-        "iterm2|Terminal|/Applications/iTerm.app|--cask iterm2|Legacy: none"
-        "github-cli|Development|gh command|gh|Legacy: none"
-        "postgresql|Database|postgres command|postgresql@16|Legacy: installer or postgres.app"
-        "redis|Database|redis-server command|redis|Legacy: manual install"
-        "aws-vault|AWS Tool|aws-vault command|aws-vault|Legacy: manual install"
-    )
+    # Different tool lists for macOS vs Ubuntu
+    # macOS uses casks for GUI apps, Ubuntu uses snap/deb/flatpak
+    local tools_list=()
+
+    if [[ "$OS" == "macos" ]]; then
+        tools_list=(
+            "cursor|Code Editor|/Applications/Cursor.app|--cask cursor|Legacy: installer download"
+            "visual-studio-code|Code Editor|/Applications/Visual Studio Code.app|--cask visual-studio-code|Legacy: installer download"
+            "warp|Terminal|/Applications/Warp.app|--cask warp|Legacy: none"
+            "iterm2|Terminal|/Applications/iTerm.app|--cask iterm2|Legacy: none"
+            "github-cli|Development|gh command|gh|Legacy: none"
+            "postgresql|Database|postgres command|postgresql@16|Legacy: installer or postgres.app"
+            "redis|Database|redis-server command|redis|Legacy: manual install"
+            "aws-vault|AWS Tool|aws-vault command|aws-vault|Legacy: manual install"
+        )
+    elif [[ "$OS" == "ubuntu" ]]; then
+        # On Ubuntu, use brew for CLI tools, snap for GUI apps
+        tools_list=(
+            "github-cli|Development|gh command|gh|brew"
+            "postgresql|Database|postgres command|postgresql@16|brew"
+            "redis|Database|redis-server command|redis|brew"
+            "aws-vault|AWS Tool|aws-vault command|aws-vault|brew"
+            "awscli|AWS CLI|aws command|awscli|brew"
+            "docker|Container Runtime|docker command|docker|snap"
+        )
+    fi
 
     # Check each tool individually (compatible approach)
     echo ""
@@ -392,26 +561,22 @@ install_terminal_apps() {
                     "postgresql") cmd_name="postgres" ;;
                     "redis") cmd_name="redis-server" ;;
                     "aws-vault") cmd_name="aws-vault" ;;
+                    "awscli") cmd_name="aws" ;;
+                    "docker") cmd_name="docker" ;;
                 esac
                 if command -v "$cmd_name" >/dev/null 2>&1; then
                     installed=true
-                    # Check if it's a legacy installation (not via Homebrew)
-                    # Extract package name from install command (remove --cask and other flags)
-                    local brew_pkg_name="${install_cmd##* }" # Get last word (package name)
-                    if ! brew list "$brew_pkg_name" >/dev/null 2>&1; then
-                        legacy_info="Legacy: $cmd_name command found (non-Homebrew)"
-                    fi
                 fi
                 ;;
         esac
 
         # Display status and ask for installation
         if [ "$installed" = "true" ]; then
-            log_success "$tool already installed ($legacy_info)"
+            log_success "$tool already installed"
         else
             log_info "$tool not found - $category tool"
             if confirm "Install $tool?"; then
-                to_install+=("$tool|$install_cmd")
+                to_install+=("$tool|$install_cmd|$legacy_info")
             else
                 log_info "Skipped $tool installation"
             fi
@@ -423,35 +588,27 @@ install_terminal_apps() {
         log_info "Installing selected tools..."
 
         for tool_install in "${to_install[@]}"; do
-            IFS='|' read -r tool install_cmd <<<"$tool_install"
+            IFS='|' read -r tool install_cmd install_method <<<"$tool_install"
             log_info "Installing $tool..."
 
-            # Special handling for Docker Desktop detection
-            if [ "$tool" = "docker" ]; then
-                # Enhanced Docker vs Rancher Desktop detection
-                local has_docker_desktop=false
-                local has_rancher_desktop=false
-
-                # Check for Docker Desktop
-                if [ -d "/Applications/Docker.app" ]; then
-                    has_docker_desktop=true
+            # Handle different installation methods
+            if [[ "$OS" == "ubuntu" && "$install_method" == "snap" ]]; then
+                if command_exists snap; then
+                    if sudo snap install "$tool"; then
+                        log_success "$tool installed successfully via snap"
+                    else
+                        log_warning "Failed to install $tool via snap"
+                    fi
+                else
+                    log_warning "Snap not available. Install $tool manually."
                 fi
-
-                # Check for Rancher Desktop
-                if [ -d "/Applications/Rancher Desktop.app" ]; then
-                    has_rancher_desktop=true
-                fi
-
-                if [ "$has_rancher_desktop" = "true" ] && [ "$has_docker_desktop" = "false" ]; then
-                    log_success "Rancher Desktop detected (provides Docker functionality)"
-                    continue
-                fi
-            fi
-
-            if brew install "$install_cmd"; then
-                log_success "$tool installed successfully"
             else
-                log_warning "Failed to install $tool - you may need to install it manually"
+                # Use brew for all other tools
+                if brew install $install_cmd; then
+                    log_success "$tool installed successfully"
+                else
+                    log_warning "Failed to install $tool - you may need to install it manually"
+                fi
             fi
         done
     else
@@ -459,23 +616,88 @@ install_terminal_apps() {
     fi
 }
 
+# Install Docker on Ubuntu
+install_docker_ubuntu() {
+    if [[ "$OS" != "ubuntu" ]]; then
+        return 0
+    fi
+
+    if command_exists docker; then
+        log_success "Docker already installed: $(docker --version)"
+        return 0
+    fi
+
+    log_step "Installing Docker"
+
+    if confirm "Install Docker Engine? (Recommended for containerized development)"; then
+        log_info "Installing Docker using official script..."
+
+        # Remove old versions if present
+        sudo apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+
+        # Install using official convenience script
+        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        sudo sh /tmp/get-docker.sh
+        rm /tmp/get-docker.sh
+
+        # Add current user to docker group
+        sudo usermod -aG docker "$USER"
+        log_success "Docker installed successfully"
+        log_warning "You may need to log out and back in for docker group membership to take effect"
+    else
+        log_warning "Skipped Docker installation"
+    fi
+}
+
 # Install Nerd Fonts
 install_fonts() {
     log_step "Installing Nerd Fonts"
 
-    # Check if FiraCode Nerd Font is installed (check for any variant)
-    if ls "$HOME/Library/Fonts/FiraCodeNerdFont"*.ttf >/dev/null 2>&1 ||
-        brew list --cask font-fira-code-nerd-font >/dev/null 2>&1; then
+    local font_installed=false
+
+    if [[ "$OS" == "macos" ]]; then
+        # Check if FiraCode Nerd Font is installed on macOS
+        if ls "$HOME/Library/Fonts/FiraCodeNerdFont"*.ttf >/dev/null 2>&1 ||
+            brew list --cask font-fira-code-nerd-font >/dev/null 2>&1; then
+            font_installed=true
+        fi
+    elif [[ "$OS" == "ubuntu" ]]; then
+        # Check if FiraCode Nerd Font is installed on Linux
+        if fc-list | grep -qi "FiraCode Nerd" 2>/dev/null; then
+            font_installed=true
+        fi
+    fi
+
+    if [ "$font_installed" = true ]; then
         log_success "FiraCode Nerd Font already installed"
         return 0
     fi
 
     log_warning "Nerd Font not found"
     if confirm "Install FiraCode Nerd Font? (Required for proper prompt display)"; then
-        log_info "Installing FiraCode Nerd Font..."
-        # Fonts are now in the main homebrew-cask repository
-        brew install --cask font-fira-code-nerd-font
-        log_success "FiraCode Nerd Font installed"
+        if [[ "$OS" == "macos" ]]; then
+            log_info "Installing FiraCode Nerd Font via Homebrew..."
+            brew install --cask font-fira-code-nerd-font
+            log_success "FiraCode Nerd Font installed"
+        elif [[ "$OS" == "ubuntu" ]]; then
+            log_info "Installing FiraCode Nerd Font..."
+            local font_dir="$HOME/.local/share/fonts"
+            mkdir -p "$font_dir"
+
+            # Download FiraCode Nerd Font
+            local nerd_font_url="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip"
+            local tmp_zip="/tmp/FiraCode.zip"
+
+            if curl -fsSL "$nerd_font_url" -o "$tmp_zip"; then
+                unzip -o "$tmp_zip" -d "$font_dir" -x "*.md" -x "*.txt" -x "LICENSE" 2>/dev/null || true
+                rm -f "$tmp_zip"
+                # Refresh font cache
+                fc-cache -fv "$font_dir" >/dev/null 2>&1
+                log_success "FiraCode Nerd Font installed"
+            else
+                log_warning "Could not download Nerd Font. Install manually from https://www.nerdfonts.com/"
+            fi
+        fi
         log_info "Please configure your terminal to use 'FiraCode Nerd Font'"
     else
         log_warning "Skipped font installation - prompt may not display correctly"
@@ -601,6 +823,7 @@ setup_secret_management() {
     # Check if SOPS is installed
     if ! command -v sops >/dev/null 2>&1; then
         log_error "SOPS is not installed. Please install it with: brew install sops"
+        log_info "SOPS should have been installed with core dependencies."
         return 1
     fi
 
@@ -1017,7 +1240,7 @@ test_installation() {
 
 # Print final instructions
 print_final_instructions() {
-    echo -e "\n${GREEN}🎉 Dotfiles installation completed!${NC}\n"
+    echo -e "\n${GREEN}🎉 Dotfiles installation completed on $OS_NAME!${NC}\n"
 
     echo -e "${CYAN}Next steps:${NC}"
     echo -e "1. ${YELLOW}Restart your terminal${NC} or run: ${BLUE}source ~/.zshrc${NC}"
@@ -1026,9 +1249,16 @@ print_final_instructions() {
     echo -e "4. ${YELLOW}Explore available aliases${NC} with: ${BLUE}alias | grep git${NC}"
 
     echo -e "\n${CYAN}Terminal font configuration:${NC}"
-    echo -e "• ${YELLOW}Warp:${NC} Settings → Appearance → Text → Font"
-    echo -e "• ${YELLOW}iTerm2:${NC} Preferences → Profiles → Text → Font"
-    echo -e "• ${YELLOW}Terminal.app:${NC} Preferences → Profiles → Text → Font"
+    if [[ "$OS" == "macos" ]]; then
+        echo -e "• ${YELLOW}Warp:${NC} Settings → Appearance → Text → Font"
+        echo -e "• ${YELLOW}iTerm2:${NC} Preferences → Profiles → Text → Font"
+        echo -e "• ${YELLOW}Terminal.app:${NC} Preferences → Profiles → Text → Font"
+    elif [[ "$OS" == "ubuntu" ]]; then
+        echo -e "• ${YELLOW}GNOME Terminal:${NC} Preferences → Profiles → Text → Custom font"
+        echo -e "• ${YELLOW}Terminator:${NC} Right-click → Preferences → Profiles → Font"
+        echo -e "• ${YELLOW}VS Code:${NC} Settings → terminal.integrated.fontFamily"
+        echo -e "• ${YELLOW}Tilix:${NC} Preferences → Profiles → Font"
+    fi
 
     echo -e "\n${CYAN}Useful commands to try:${NC}"
     echo -e "• ${BLUE}show_tools${NC} - Discover all modern CLI tools with examples"
@@ -1042,6 +1272,13 @@ print_final_instructions() {
     echo -e "\n${CYAN}For help and troubleshooting:${NC}"
     echo -e "• Check the README.md file"
     echo -e "• Open an issue on GitHub"
+
+    if [[ "$OS" == "ubuntu" ]]; then
+        echo -e "\n${CYAN}Ubuntu-specific notes:${NC}"
+        echo -e "• System packages are managed via APT"
+        echo -e "• Developer tools are managed via Linuxbrew (brew command)"
+        echo -e "• To update dev tools: ${BLUE}brew update && brew upgrade${NC}"
+    fi
 
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
@@ -1064,6 +1301,7 @@ main() {
     echo -e "${PURPLE}╔══════════════════════════════════════════╗${NC}"
     echo -e "${PURPLE}║        Thisaru's Dotfiles Installer      ║${NC}"
     echo -e "${PURPLE}║    Enhanced Development Environment      ║${NC}"
+    echo -e "${PURPLE}║      Supports macOS & Ubuntu/Debian      ║${NC}"
     echo -e "${PURPLE}╚══════════════════════════════════════════╝${NC}"
     echo ""
 
@@ -1074,6 +1312,7 @@ main() {
         exit 1
     fi
 
+    log_info "Detected OS: $OS_NAME"
     log_info "Starting installation from: $DOTFILES_DIR"
     log_info "This script will set up your complete development environment"
     echo -e "${CYAN}${INFO} During installation, press 'y' for yes, 'n' for no, or 'q' to quit (no Enter needed)${NC}"
@@ -1083,23 +1322,49 @@ main() {
         exit 0
     fi
 
-    # Run installation steps
-    check_macos
-    check_xcode_tools
+    # Run installation steps (order matters!)
+
+    # Step 1: Check OS compatibility
+    check_os
+
+    # Step 2: Install OS-specific prerequisites
+    if [[ "$OS" == "macos" ]]; then
+        check_xcode_tools
+    elif [[ "$OS" == "ubuntu" ]]; then
+        install_ubuntu_prerequisites
+    fi
+
+    # Step 3: Install Homebrew/Linuxbrew (universal package manager for dev tools)
     setup_homebrew
+
+    # Step 4: Install essential tools
     install_stow
     install_core_dependencies
+
+    # Step 5: Install development tools
     install_dev_tools
+
+    # Step 6: Install optional applications
     install_terminal_apps
+    if [[ "$OS" == "ubuntu" ]]; then
+        install_docker_ubuntu
+    fi
+
+    # Step 7: Install fonts
     install_fonts
+
+    # Step 8: Install shell plugins
     install_zinit
+
+    # Step 9: Setup configuration
     setup_environment
     setup_secret_management
     backup_existing_files
     stow_packages
     setup_git_config
-    test_installation
 
+    # Step 10: Test and finish
+    test_installation
     print_final_instructions
 }
 
