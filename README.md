@@ -73,9 +73,6 @@ The installation script will offer to install FiraCode Nerd Font automatically.
 - **GNOME Terminal**: Preferences → Profiles → Text → Custom font
 - **VS Code**: Settings → terminal.integrated.fontFamily → "FiraCode Nerd Font"
 
-### Option 1: Automated Installation (Recommended)
-
-The easiest way to set up everything:
 ## 🛠 Installation
 
 ### Option 1: Automated Installation (Recommended)
@@ -92,11 +89,21 @@ cd ~/dotfiles
 ./init.sh
 ```
 
-The `init.sh` script will:
+The `init.sh` script automatically detects your operating system and performs platform-specific setup:
 
-- ✅ Check for macOS compatibility
+**On macOS:**
 - ✅ Install Xcode Command Line Tools (if needed)
 - ✅ Install Homebrew (if needed)
+- ✅ Install all packages via Homebrew
+- ✅ Offer terminal app installation (Warp or iTerm2)
+
+**On Ubuntu/Debian:**
+- ✅ Install APT prerequisites (build-essential, zsh, stow, curl, etc.)
+- ✅ Install Linuxbrew for developer tools
+- ✅ Set Zsh as your default shell
+- ✅ Install all packages via Linuxbrew
+
+**On Both Platforms:**
 - ✅ Install GNU Stow (dotfiles manager)
 - ✅ Install modern CLI tools (eza, bat, delta, lazygit, tmux, direnv, atuin)
 - ✅ Install secret management tools (sops, age)
@@ -105,7 +112,6 @@ The `init.sh` script will:
 - ✅ Enhanced tool installation (Cursor, VS Code, GitHub CLI, PostgreSQL, Redis, AWS Vault)
 - ✅ Install SDKMAN (Java, Gradle, Maven, Kotlin manager)
 - ✅ Install Ballerina (Cloud-native programming language)
-- ✅ Offer terminal app installation (Warp or iTerm2)
 - ✅ Install and configure Nerd Fonts
 - ✅ Set up Zinit plugin manager
 - ✅ Create environment file from template with encryption
@@ -114,13 +120,14 @@ The `init.sh` script will:
 - ✅ Use Stow to manage symlinks cleanly
 - ✅ Test the installation with built-in validation suite
 - ✅ Provide next steps and usage instructions
-- 
-#### Step 1: Install Prerequisites
+
 ### Option 2: Manual Installation
 
 If you prefer to install manually or need to customize the process:
 
 #### Step 1: Install Prerequisites
+
+**For macOS:**
 
 ```bash
 # Install Homebrew (if not installed)
@@ -139,6 +146,43 @@ brew install --cask iterm2         # Alternative
 
 # Install Nerd Font (no tap needed - fonts are now in main repository)
 brew install --cask font-fira-code-nerd-font
+
+# Install SDKMAN (Java ecosystem)
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+```
+
+**For Ubuntu/Debian:**
+
+```bash
+# Update package list
+sudo apt update
+
+# Install system prerequisites
+sudo apt install -y git curl build-essential procps file zsh stow
+
+# Install Linuxbrew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Add Linuxbrew to PATH (add to your shell profile for persistence)
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+# Install core dependencies via Linuxbrew
+brew install starship fzf zoxide tree bat eza ripgrep fd git-delta lazygit tmux htop direnv atuin gh sops age git-flow-avh
+
+# Install development tools (optional)
+brew install pyenv rbenv nvm
+
+# Install Nerd Font manually (download from https://www.nerdfonts.com/font-downloads)
+# Or use the automated script:
+mkdir -p ~/.local/share/fonts
+cd ~/.local/share/fonts
+curl -fLo "FiraCode Nerd Font Regular.ttf" \
+  https://github.com/ryanoasis/nerd-fonts/raw/HEAD/patched-fonts/FiraCode/Regular/FiraCodeNerdFont-Regular.ttf
+fc-cache -fv
+
+# Set Zsh as default shell
+chsh -s $(which zsh)
 
 # Install SDKMAN (Java ecosystem)
 curl -s "https://get.sdkman.io" | bash
@@ -219,12 +263,7 @@ The system organizes packages into logical categories:
    ./bin/generate-brewfile
    ```
 
-#### Step 2: Install Zinit
-   ```bash
-   brew bundle --file=Brewfile
-   ```
-
-#### Step 2: Install Zinit
+#### Step 2: Clone and Set Up Dotfiles
 
 ```bash
 1. **Clone the repository**:
@@ -271,11 +310,6 @@ The system organizes packages into logical categories:
    # Restart your terminal or source the new configuration
    source ~/.zshrc
    ```
-5. **Apply configuration**:
-   ```bash
-   # Restart your terminal or source the new configuration
-   source ~/.zshrc
-   ```
 
 ## 🚀 Quick Start
 
@@ -314,20 +348,11 @@ take my-project                            # Create directory and enter it
 kill_by_port 3000                         # Kill processes on port 3000
 
 # 📦 PACKAGE MANAGEMENT - Configure Your Setup
-#### Stow Package Structure
-
-The dotfiles are organized into logical packages:
-
-- **zsh/** - All shell-related configurations (.zshrc, .aliases.sh, .functions.sh, etc.)
-- **vim/** - Vim configuration (.vimrc)
-- **git/** - Git configuration with modern features and security
-- **tmux/** - Terminal multiplexer configuration
-- **direnv/** - Project-specific environment management
-- **.config/** - XDG-compliant application configs (Starship, Lazygit, Ripgrep)
 
 #### Stow Package Structure
 
 The dotfiles are organized into logical packages:
+
 - **zsh/** - All shell-related configurations (.zshrc, .aliases.sh, .functions.sh, etc.)
 - **vim/** - Vim configuration (.vimrc)
 - **git/** - Git configuration with modern features and security
@@ -1001,6 +1026,66 @@ brew uninstall oh-my-posh
 brew install oh-my-posh
 ```
 
+### Ubuntu/Debian-Specific Issues
+
+**Linuxbrew not found after installation**:
+
+```bash
+# Add Linuxbrew to your PATH
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+# Add to ~/.zshrc or ~/.bashrc for persistence
+echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.zshrc
+```
+
+**Zsh not set as default shell**:
+
+```bash
+# Set Zsh as default (requires logout/login)
+chsh -s $(which zsh)
+
+# If chsh fails, add zsh path to /etc/shells first
+echo $(which zsh) | sudo tee -a /etc/shells
+chsh -s $(which zsh)
+```
+
+**Missing build dependencies on Ubuntu**:
+
+```bash
+# Install essential build tools required by Linuxbrew
+sudo apt install -y build-essential procps curl file git
+```
+
+**Nerd Fonts not rendering correctly in terminal**:
+
+```bash
+# Install fonts manually
+mkdir -p ~/.local/share/fonts
+cd ~/.local/share/fonts
+curl -fLo "FiraCode Nerd Font Regular.ttf" \
+  https://github.com/ryanoasis/nerd-fonts/raw/HEAD/patched-fonts/FiraCode/Regular/FiraCodeNerdFont-Regular.ttf
+fc-cache -fv
+
+# Then configure your terminal:
+# - GNOME Terminal: Preferences → Profiles → Text → Custom font → "FiraCode Nerd Font"
+# - Tilix: Settings → Profile → General → Font → "FiraCode Nerd Font"
+# - Terminator: Preferences → Profiles → General → Font → "FiraCode Nerd Font"
+```
+
+**Stow conflicts with existing files**:
+
+```bash
+# Check for conflicts (dry-run)
+stow -n -t $HOME zsh
+
+# Backup existing files before stowing
+mv ~/.zshrc ~/.zshrc.backup
+mv ~/.aliases.sh ~/.aliases.sh.backup
+
+# Then stow
+stow -t $HOME zsh
+```
+
 **Seeing "CONFIG ERROR" in prompt**:
 This means Oh My Posh can't find the zen.json theme file.
 
@@ -1163,7 +1248,11 @@ source ~/.zshrc  # Reload configuration
 
 ## 📝 Notes
 
-- This setup works with any modern terminal (Warp, iTerm2, Terminal.app, etc.)
+- This setup works with any modern terminal:
+  - **macOS**: Warp, iTerm2, Terminal.app
+  - **Ubuntu/Debian**: GNOME Terminal, Tilix, Terminator, Alacritty
+- On Ubuntu/Debian, the setup uses a hybrid approach: APT for system packages and Linuxbrew for developer tools
+- Linuxbrew is installed to `/home/linuxbrew/.linuxbrew` (system-wide) or `~/.linuxbrew` (user-only)
 - The configuration prioritizes productivity and includes many shortcuts - take time to learn them!
 - All sensitive data is kept in local `.env` file and never committed to git
 - The setup includes extensive error handling and helpful messages
