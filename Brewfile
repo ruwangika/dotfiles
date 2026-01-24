@@ -1,7 +1,7 @@
 # Thisaru's Dotfiles Brewfile
 # Generated automatically from packages.json
-# Configuration version: 1.0.0
-# Generated on: 2025-10-08 17:59:34
+# Configuration version: 2.0.0
+# Generated on: 2026-01-24 22:10:53
 # Install with: brew bundle
 
 # Homebrew taps
@@ -50,15 +50,24 @@ cask "font-fira-code-nerd-font"     # Nerd font with icons
 # brew "postgresql@16"                # PostgreSQL database
 # brew "redis"                        # In-memory data store
 
+# Database GUI clients and management tools (optional - uncomment as needed)
+# cask "dbeaver-community"            # Universal database tool
+# cask "pgadmin4"                     # PostgreSQL administration tool
+# cask "mongodb-compass"              # MongoDB GUI client
+
 # AWS development tools (optional - uncomment as needed)
 # brew "aws-vault"                    # AWS credentials manager
 
 # Google Cloud Platform tools (optional - uncomment as needed)
 # cask "google-cloud-sdk"             # Google Cloud SDK and CLI tools
 
+# Web browsers (optional - uncomment as needed)
+# cask "google-chrome"                # Google Chrome browser
+
 # Code editors and IDEs (optional - uncomment as needed)
 # cask "cursor"                       # AI-powered code editor
 # cask "visual-studio-code"           # Microsoft's code editor
+# cask "intellij-idea"                # IntelliJ IDEA Ultimate Edition
 
 # Modern terminal applications (optional - uncomment as needed)
 # cask "warp"                         # Modern terminal with AI features

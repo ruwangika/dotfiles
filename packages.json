@@ -2,7 +2,7 @@
   "metadata": {
     "version": "2.0.0",
     "description": "Thisaru's Dotfiles Package Configuration - Cross-platform (macOS & Ubuntu)",
-    "last_updated": "2026-01-11",
+    "last_updated": "2026-01-24",
     "format_version": "2.0",
     "supported_platforms": ["macos", "ubuntu", "debian"]
   },
@@ -211,6 +211,54 @@
         }
       }
     },
+    "database-clients": {
+      "description": "Database GUI clients and management tools",
+      "enabled": false,
+      "required": false,
+      "prompt_message": "Install database GUI clients?",
+      "packages": {
+        "dbeaver-community": {
+          "enabled": false,
+          "type": "cask",
+          "description": "Universal database tool",
+          "required": false,
+          "ubuntu": {
+            "method": "apt-repo",
+            "setup_commands": [
+              "curl -fsSL https://dbeaver.io/debs/dbeaver.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/dbeaver.gpg",
+              "echo 'deb [signed-by=/usr/share/keyrings/dbeaver.gpg] https://dbeaver.io/debs/dbeaver-ce /' | sudo tee /etc/apt/sources.list.d/dbeaver.list",
+              "sudo apt update"
+            ],
+            "package": "dbeaver-ce"
+          }
+        },
+        "pgadmin4": {
+          "enabled": false,
+          "type": "cask",
+          "description": "PostgreSQL administration tool",
+          "required": false,
+          "ubuntu": {
+            "method": "apt-repo",
+            "setup_commands": [
+              "curl -fsS https://www.pgadmin.org/static/packages_pgadmin_org.pub | sudo gpg --dearmor -o /usr/share/keyrings/packages-pgadmin-org.gpg",
+              "echo 'deb [signed-by=/usr/share/keyrings/packages-pgadmin-org.gpg] https://ftp.postgresql.org/pub/pgadmin/pgadmin4/apt/$(lsb_release -cs) pgadmin4 main' | sudo tee /etc/apt/sources.list.d/pgadmin4.list",
+              "sudo apt update"
+            ],
+            "package": "pgadmin4-desktop"
+          }
+        },
+        "mongodb-compass": {
+          "enabled": false,
+          "type": "cask",
+          "description": "MongoDB GUI client",
+          "required": false,
+          "ubuntu": {
+            "method": "mongodb-compass",
+            "note": "Fetches latest version from official MongoDB downloads"
+          }
+        }
+      }
+    },
     "aws": {
       "description": "AWS development tools",
       "enabled": false,
@@ -253,11 +301,29 @@
         }
       }
     },
+    "browsers": {
+      "description": "Web browsers",
+      "enabled": false,
+      "required": false,
+      "prompt_message": "Install web browsers?",
+      "packages": {
+        "google-chrome": {
+          "enabled": false,
+          "type": "cask",
+          "description": "Google Chrome browser",
+          "required": false,
+          "ubuntu": {
+            "method": "deb",
+            "url": "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
+          }
+        }
+      }
+    },
     "editors": {
       "description": "Code editors and IDEs",
       "enabled": false,
       "required": false,
-      "prompt_message": "Install code editors?",
+      "prompt_message": "Install code editors and IDEs?",
       "packages": {
         "cursor": {
           "enabled": false,
@@ -269,7 +335,26 @@
           "enabled": false,
           "type": "cask",
           "description": "Microsoft's code editor",
-          "required": false
+          "required": false,
+          "ubuntu": {
+            "method": "apt-repo",
+            "setup_commands": [
+              "curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg",
+              "echo 'deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main' | sudo tee /etc/apt/sources.list.d/vscode.list",
+              "sudo apt update"
+            ],
+            "package": "code"
+          }
+        },
+        "intellij-idea": {
+          "enabled": false,
+          "type": "cask",
+          "description": "IntelliJ IDEA Ultimate Edition",
+          "required": false,
+          "ubuntu": {
+            "method": "jetbrains-toolbox",
+            "note": "Installs JetBrains Toolbox which manages IntelliJ IDEA and other JetBrains IDEs"
+          }
         }
       }
     },
@@ -323,7 +408,14 @@
           "enabled": false,
           "type": "cask",
           "description": "API testing tool",
-          "required": false
+          "required": false,
+          "ubuntu": {
+            "method": "tarball",
+            "url": "https://dl.pstmn.io/download/latest/linux_64",
+            "install_dir": "/opt/Postman",
+            "binary_name": "Postman",
+            "desktop_file": true
+          }
         },
         "tableplus": {
           "enabled": false,

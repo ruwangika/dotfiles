@@ -505,7 +505,7 @@ install_terminal_apps() {
     log_step "Installing Development Tools (Optional)"
 
     # Different tool lists for macOS vs Ubuntu
-    # macOS uses casks for GUI apps, Ubuntu uses snap/deb/flatpak
+    # macOS uses casks for GUI apps, Ubuntu uses APT/deb or Linuxbrew
     local tools_list=()
 
     if [[ "$OS" == "macos" ]]; then
@@ -520,14 +520,13 @@ install_terminal_apps() {
             "aws-vault|AWS Tool|aws-vault command|aws-vault|Legacy: manual install"
         )
     elif [[ "$OS" == "ubuntu" ]]; then
-        # On Ubuntu, use brew for CLI tools, snap for GUI apps
+        # On Ubuntu, use Linuxbrew for CLI tools (Docker handled separately)
         tools_list=(
             "github-cli|Development|gh command|gh|brew"
             "postgresql|Database|postgres command|postgresql@16|brew"
             "redis|Database|redis-server command|redis|brew"
             "aws-vault|AWS Tool|aws-vault command|aws-vault|brew"
             "awscli|AWS CLI|aws command|awscli|brew"
-            "docker|Container Runtime|docker command|docker|snap"
         )
     fi
 
@@ -591,28 +590,279 @@ install_terminal_apps() {
             IFS='|' read -r tool install_cmd install_method <<<"$tool_install"
             log_info "Installing $tool..."
 
-            # Handle different installation methods
-            if [[ "$OS" == "ubuntu" && "$install_method" == "snap" ]]; then
-                if command_exists snap; then
-                    if sudo snap install "$tool"; then
-                        log_success "$tool installed successfully via snap"
-                    else
-                        log_warning "Failed to install $tool via snap"
-                    fi
-                else
-                    log_warning "Snap not available. Install $tool manually."
-                fi
+            # Use brew for tool installation
+            if brew install $install_cmd; then
+                log_success "$tool installed successfully"
             else
-                # Use brew for all other tools
-                if brew install $install_cmd; then
-                    log_success "$tool installed successfully"
-                else
-                    log_warning "Failed to install $tool - you may need to install it manually"
-                fi
+                log_warning "Failed to install $tool - you may need to install it manually"
             fi
         done
     else
         log_success "All desired tools are already installed or skipped"
+    fi
+}
+
+# Install GUI applications from packages.json
+install_gui_applications() {
+    log_step "Installing GUI Applications (Optional)"
+
+    if ! command_exists jq || [ ! -f "$DOTFILES_DIR/packages.json" ]; then
+        log_warning "jq or packages.json not found, skipping GUI application installation"
+        return 0
+    fi
+
+    # Categories with GUI apps (cask type)
+    local gui_categories=("browsers" "editors" "database-clients" "productivity" "terminals" "containers")
+
+    for category in "${gui_categories[@]}"; do
+        local category_desc
+        category_desc=$(jq -r ".categories.\"$category\".description // \"$category\"" "$DOTFILES_DIR/packages.json")
+
+        # Get all cask packages from this category
+        local packages_json
+        packages_json=$(jq -r ".categories.\"$category\".packages // {} | to_entries[] | select(.value.type == \"cask\") | .key" "$DOTFILES_DIR/packages.json" 2>/dev/null)
+
+        if [ -z "$packages_json" ]; then
+            continue
+        fi
+
+        echo ""
+        log_info "Category: $category_desc"
+
+        for package in $packages_json; do
+            local description
+            description=$(jq -r ".categories.\"$category\".packages.\"$package\".description" "$DOTFILES_DIR/packages.json")
+
+            # Check if already installed
+            local installed=false
+
+            if [[ "$OS" == "macos" ]]; then
+                # Check if cask is installed or app exists
+                if brew list --cask "$package" >/dev/null 2>&1; then
+                    installed=true
+                fi
+                # Check common app locations
+                case "$package" in
+                    "google-chrome")
+                        [ -d "/Applications/Google Chrome.app" ] && installed=true ;;
+                    "visual-studio-code")
+                        [ -d "/Applications/Visual Studio Code.app" ] && installed=true ;;
+                    "intellij-idea")
+                        [ -d "/Applications/IntelliJ IDEA.app" ] && installed=true ;;
+                    "postman")
+                        [ -d "/Applications/Postman.app" ] && installed=true ;;
+                    "dbeaver-community")
+                        [ -d "/Applications/DBeaver.app" ] && installed=true ;;
+                    "pgadmin4")
+                        [ -d "/Applications/pgAdmin 4.app" ] && installed=true ;;
+                    "mongodb-compass")
+                        [ -d "/Applications/MongoDB Compass.app" ] && installed=true ;;
+                esac
+            elif [[ "$OS" == "ubuntu" ]]; then
+                # Check using dpkg or command
+                case "$package" in
+                    "google-chrome")
+                        command -v google-chrome >/dev/null 2>&1 && installed=true ;;
+                    "visual-studio-code")
+                        command -v code >/dev/null 2>&1 && installed=true ;;
+                    "intellij-idea")
+                        [ -d "$HOME/.local/share/JetBrains/Toolbox" ] && installed=true ;;
+                    "postman")
+                        [ -d "/opt/Postman" ] || command -v postman >/dev/null 2>&1 && installed=true ;;
+                    "dbeaver-community")
+                        dpkg -s dbeaver-ce >/dev/null 2>&1 && installed=true ;;
+                    "pgadmin4")
+                        dpkg -s pgadmin4-desktop >/dev/null 2>&1 && installed=true ;;
+                    "mongodb-compass")
+                        command -v mongodb-compass >/dev/null 2>&1 && installed=true ;;
+                esac
+            fi
+
+            if [ "$installed" = true ]; then
+                log_success "$package already installed"
+            else
+                if confirm "Install $package? ($description)"; then
+                    install_gui_app "$package" "$category"
+                else
+                    log_info "Skipped $package"
+                fi
+            fi
+        done
+    done
+}
+
+# Install a single GUI application
+install_gui_app() {
+    local package="$1"
+    local category="$2"
+
+    if [[ "$OS" == "macos" ]]; then
+        log_info "Installing $package via Homebrew Cask..."
+        if brew install --cask "$package"; then
+            log_success "$package installed successfully"
+        else
+            log_error "Failed to install $package"
+        fi
+    elif [[ "$OS" == "ubuntu" ]]; then
+        # Get Ubuntu-specific installation info from packages.json
+        local ubuntu_config
+        ubuntu_config=$(jq -r ".categories.\"$category\".packages.\"$package\".ubuntu // empty" "$DOTFILES_DIR/packages.json")
+
+        if [ -z "$ubuntu_config" ]; then
+            log_warning "No Ubuntu installation method defined for $package"
+            return 1
+        fi
+
+        local method
+        method=$(echo "$ubuntu_config" | jq -r ".method")
+
+        case "$method" in
+            "deb")
+                local deb_url
+                deb_url=$(echo "$ubuntu_config" | jq -r ".url")
+                local tmp_deb="/tmp/${package}.deb"
+
+                log_info "Downloading $package..."
+                if curl -fsSL "$deb_url" -o "$tmp_deb"; then
+                    log_info "Installing $package..."
+                    if sudo dpkg -i "$tmp_deb" || sudo apt-get install -f -y; then
+                        log_success "$package installed successfully"
+                    else
+                        log_error "Failed to install $package"
+                    fi
+                    rm -f "$tmp_deb"
+                else
+                    log_error "Failed to download $package"
+                fi
+                ;;
+            "apt-repo")
+                local apt_package setup_commands
+                apt_package=$(echo "$ubuntu_config" | jq -r ".package")
+
+                log_info "Setting up repository for $package..."
+                # Run setup commands
+                local cmd_count
+                cmd_count=$(echo "$ubuntu_config" | jq -r ".setup_commands | length")
+
+                for ((i = 0; i < cmd_count; i++)); do
+                    local cmd
+                    cmd=$(echo "$ubuntu_config" | jq -r ".setup_commands[$i]")
+                    log_info "Running: $cmd"
+                    if ! eval "$cmd"; then
+                        log_error "Setup command failed for $package"
+                        return 1
+                    fi
+                done
+
+                log_info "Installing $apt_package..."
+                if sudo apt-get install -y "$apt_package"; then
+                    log_success "$package installed successfully"
+                else
+                    log_error "Failed to install $package"
+                fi
+                ;;
+            "tarball")
+                local tarball_url install_dir binary_name
+                tarball_url=$(echo "$ubuntu_config" | jq -r ".url")
+                install_dir=$(echo "$ubuntu_config" | jq -r ".install_dir // \"/opt/$package\"")
+                binary_name=$(echo "$ubuntu_config" | jq -r ".binary_name // \"$package\"")
+                local tmp_tar="/tmp/${package}.tar.gz"
+
+                log_info "Downloading $package..."
+                if curl -fsSL "$tarball_url" -o "$tmp_tar"; then
+                    log_info "Extracting to $install_dir..."
+                    sudo mkdir -p "$install_dir"
+                    sudo tar -xzf "$tmp_tar" -C "$(dirname "$install_dir")" --strip-components=0
+                    rm -f "$tmp_tar"
+
+                    # Create desktop entry if requested
+                    local create_desktop
+                    create_desktop=$(echo "$ubuntu_config" | jq -r ".desktop_file // false")
+                    if [ "$create_desktop" = "true" ]; then
+                        local desktop_file="$HOME/.local/share/applications/${package}.desktop"
+                        mkdir -p "$HOME/.local/share/applications"
+                        cat > "$desktop_file" <<EOF
+[Desktop Entry]
+Name=$binary_name
+Exec=$install_dir/$binary_name
+Icon=$install_dir/app/resources/app/assets/icon.png
+Type=Application
+Categories=Development;
+EOF
+                        log_info "Created desktop entry: $desktop_file"
+                    fi
+
+                    # Create symlink to /usr/local/bin
+                    if [ -f "$install_dir/$binary_name" ]; then
+                        sudo ln -sf "$install_dir/$binary_name" "/usr/local/bin/${package,,}"
+                    fi
+
+                    log_success "$package installed successfully"
+                else
+                    log_error "Failed to download $package"
+                fi
+                ;;
+            "jetbrains-toolbox")
+                log_info "Installing JetBrains Toolbox..."
+                local toolbox_url="https://data.services.jetbrains.com/products/download?platform=linux&code=TBA"
+                local tmp_tar="/tmp/jetbrains-toolbox.tar.gz"
+
+                if curl -fsSL -o "$tmp_tar" "$toolbox_url"; then
+                    log_info "Extracting JetBrains Toolbox..."
+                    local extract_dir="/tmp/jetbrains-toolbox-extract"
+                    mkdir -p "$extract_dir"
+                    tar -xzf "$tmp_tar" -C "$extract_dir" --strip-components=1
+                    rm -f "$tmp_tar"
+
+                    # Run the toolbox installer
+                    local toolbox_bin
+                    toolbox_bin=$(find "$extract_dir" -name "jetbrains-toolbox" -type f | head -n 1)
+                    if [ -n "$toolbox_bin" ]; then
+                        log_info "Launching JetBrains Toolbox installer..."
+                        "$toolbox_bin" &
+                        log_success "JetBrains Toolbox launched. Use it to install IntelliJ IDEA Ultimate."
+                        log_info "The Toolbox will manage IDE installations and updates automatically."
+                    else
+                        log_error "Could not find JetBrains Toolbox executable"
+                    fi
+                    rm -rf "$extract_dir"
+                else
+                    log_error "Failed to download JetBrains Toolbox"
+                fi
+                ;;
+            "mongodb-compass")
+                log_info "Fetching latest MongoDB Compass version..."
+                # Get the latest version from MongoDB download center
+                local compass_version
+                compass_version=$(curl -fsSL "https://www.mongodb.com/try/download/compass" 2>/dev/null | grep -oP 'mongodb-compass_\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+                if [ -z "$compass_version" ]; then
+                    # Fallback to a known stable version
+                    compass_version="1.44.5"
+                    log_warning "Could not detect latest version, using $compass_version"
+                fi
+
+                local compass_url="https://downloads.mongodb.com/compass/mongodb-compass_${compass_version}_amd64.deb"
+                local tmp_deb="/tmp/mongodb-compass.deb"
+
+                log_info "Downloading MongoDB Compass v${compass_version}..."
+                if curl -fsSL "$compass_url" -o "$tmp_deb"; then
+                    log_info "Installing MongoDB Compass..."
+                    if sudo dpkg -i "$tmp_deb" || sudo apt-get install -f -y; then
+                        log_success "MongoDB Compass installed successfully"
+                    else
+                        log_error "Failed to install MongoDB Compass"
+                    fi
+                    rm -f "$tmp_deb"
+                else
+                    log_error "Failed to download MongoDB Compass"
+                fi
+                ;;
+            *)
+                log_warning "Unknown installation method: $method for $package"
+                return 1
+                ;;
+        esac
     fi
 }
 
@@ -1346,6 +1596,7 @@ main() {
 
     # Step 6: Install optional applications
     install_terminal_apps
+    install_gui_applications
     if [[ "$OS" == "ubuntu" ]]; then
         install_docker_ubuntu
     fi

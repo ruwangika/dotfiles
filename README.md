@@ -28,6 +28,7 @@ A comprehensive development environment setup for **macOS** and **Ubuntu/Debian*
 - **Smart Port Management**: Easy process killing by port with the `kill_by_port` function
 - **Encrypted Secret Management**: SOPS + age encryption for environment variables with seamless editing
 - **Enhanced Tool Installation**: Individual confirmation with legacy installation detection
+- **GUI Applications**: Cross-platform installation of Chrome, VS Code, IntelliJ IDEA, Postman, DBeaver, pgAdmin, MongoDB Compass
 - **Comprehensive Git Setup**: Modern Git configuration with delta integration and useful aliases
 - **Ballerina Support**: Cloud-native programming language for modern microservices
 - **Configuration Validation**: Built-in test suite to validate your environment setup
@@ -110,6 +111,7 @@ The `init.sh` script automatically detects your operating system and performs pl
 - ✅ Set up encrypted environment variables with SOPS + age
 - ✅ Offer to install development tools (Python, Ruby, Node.js managers)
 - ✅ Enhanced tool installation (Cursor, VS Code, GitHub CLI, PostgreSQL, Redis, AWS Vault)
+- ✅ GUI application installation (Chrome, IntelliJ IDEA, Postman, DBeaver, pgAdmin, MongoDB Compass)
 - ✅ Install SDKMAN (Java, Gradle, Maven, Kotlin manager)
 - ✅ Install Ballerina (Cloud-native programming language)
 - ✅ Install and configure Nerd Fonts
@@ -239,10 +241,28 @@ The system organizes packages into logical categories:
 - **security**: Secret management tools (always enabled)
 - **development**: Language version managers (optional)
 - **database**: Database servers and tools (optional)
+- **database-clients**: Database GUI clients (optional)
+- **browsers**: Web browsers (optional)
 - **editors**: Code editors and IDEs (optional)
 - **terminals**: Modern terminal applications (optional)
 - **containers**: Docker and container tools (optional)
 - **productivity**: Productivity and utility apps (optional)
+
+### GUI Applications
+
+The dotfiles support installing common GUI applications on both macOS and Ubuntu using **official sources only**:
+
+| Application | macOS | Ubuntu |
+|-------------|-------|--------|
+| **Google Chrome** | Homebrew Cask | [Official .deb](https://www.google.com/chrome/) |
+| **VS Code** | Homebrew Cask | [Microsoft APT Repository](https://code.visualstudio.com/docs/setup/linux) |
+| **IntelliJ IDEA Ultimate** | Homebrew Cask | [JetBrains Toolbox](https://www.jetbrains.com/toolbox-app/) |
+| **Postman** | Homebrew Cask | [Official Tarball](https://www.postman.com/downloads/) |
+| **DBeaver** | Homebrew Cask | [Official APT Repository](https://dbeaver.io/download/) |
+| **pgAdmin 4** | Homebrew Cask | [Official APT Repository](https://www.pgadmin.org/download/pgadmin-4-apt/) |
+| **MongoDB Compass** | Homebrew Cask | [Official .deb](https://www.mongodb.com/try/download/compass) |
+
+**Note**: On Ubuntu, we use APT repositories and direct downloads from official sources instead of Snap for better system integration and reliability.
 
 ### Customizing Your Installation
 
@@ -436,15 +456,59 @@ stow .config  # Application configs (XDG-compliant)
 
 ### Optional: Install Additional Tools
 
+**On macOS** (using Homebrew):
+
 ```bash
-# Docker Desktop (if needed)
+# Docker Desktop
 brew install --cask docker
 
-# VS Code (if needed)
+# Code Editors & IDEs
 brew install --cask visual-studio-code
+brew install --cask intellij-idea
 
-# Additional development tools
+# Database GUI Clients
+brew install --cask dbeaver-community
+brew install --cask pgadmin4
+brew install --cask mongodb-compass
+
+# Other Tools
+brew install --cask google-chrome
+brew install --cask postman
 brew install jq curl wget htop
+```
+
+**On Ubuntu** (using official repositories):
+
+```bash
+# VS Code (Microsoft APT Repository)
+curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
+echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list
+sudo apt update && sudo apt install code
+
+# DBeaver (Official APT Repository)
+curl -fsSL https://dbeaver.io/debs/dbeaver.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/dbeaver.gpg
+echo "deb [signed-by=/usr/share/keyrings/dbeaver.gpg] https://dbeaver.io/debs/dbeaver-ce /" | sudo tee /etc/apt/sources.list.d/dbeaver.list
+sudo apt update && sudo apt install dbeaver-ce
+
+# pgAdmin 4 (Official APT Repository)
+curl -fsS https://www.pgadmin.org/static/packages_pgadmin_org.pub | sudo gpg --dearmor -o /usr/share/keyrings/packages-pgadmin-org.gpg
+echo "deb [signed-by=/usr/share/keyrings/packages-pgadmin-org.gpg] https://ftp.postgresql.org/pub/pgadmin/pgadmin4/apt/$(lsb_release -cs) pgadmin4 main" | sudo tee /etc/apt/sources.list.d/pgadmin4.list
+sudo apt update && sudo apt install pgadmin4-desktop
+
+# Google Chrome (Official .deb)
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo dpkg -i google-chrome-stable_current_amd64.deb
+
+# IntelliJ IDEA (via JetBrains Toolbox)
+# Download from: https://www.jetbrains.com/toolbox-app/
+
+# Postman (Official Tarball)
+curl -fsSL https://dl.pstmn.io/download/latest/linux_64 -o postman.tar.gz
+sudo tar -xzf postman.tar.gz -C /opt/
+sudo ln -sf /opt/Postman/Postman /usr/local/bin/postman
+
+# MongoDB Compass (Official .deb)
+# Download latest from: https://www.mongodb.com/try/download/compass
 ```
 
 ## 🚀 Features Overview
